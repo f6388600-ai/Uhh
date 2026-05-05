@@ -1,5 +1,5 @@
-python-3.11.9aiogram==3.4.1
-flask==3.0.3
+aiogram==3.4.1
+flask
 pymongo
 requests
 pydantic==2.5.3
