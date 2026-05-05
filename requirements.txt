@@ -1,5 +1,2 @@
 aiogram==3.4.1
-flask
-pymongo
-requests
-pydantic==2.5.3
+aiohttp==3.9.5
