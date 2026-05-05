@@ -1,7 +1,7 @@
 import asyncio
 import os
-import requests
 import importlib.util
+import requests
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from flask import Flask
@@ -10,12 +10,12 @@ from pymongo import MongoClient
 
 # ================= CONFIG =================
 BOT_TOKEN = "8701988504:AAHgFsnTkV1n_Q_jv8iE93LSZSTn3OoqBSA"
-ADMINS = [7793812954]
+ADMIN_IDS = [7793812954]
 
 MONGO_URI = "mongodb+srv://f6388600_db_user:<db_password>@cluster0.k7ui3lf.mongodb.net/?appName=Cluster0"
-GITHUB_RAW = "https://raw.githubusercontent.com/f6388600-ai/Uhh/main/plugins/"
 
-# ================= INIT =================
+GITHUB_RAW = "https://raw.githubusercontent.com/USERNAME/REPO/main/plugins/"
+
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
@@ -24,7 +24,7 @@ db = client["bot"]
 plugins_db = db["plugins"]
 
 PLUGINS = {}
-PLUGIN_ROUTERS = {}
+ROUTERS = {}
 UPLOAD_STATE = {}
 
 # ================= KEEP ALIVE =================
@@ -32,7 +32,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot Running ☠️"
+    return "BOT RUNNING"
 
 def run_web():
     app.run(host="0.0.0.0", port=8080)
@@ -40,42 +40,28 @@ def run_web():
 def keep_alive():
     Thread(target=run_web).start()
 
-# ================= SECURITY =================
+# ================= ADMIN CHECK =================
 def is_admin(uid):
-    return uid in ADMINS
+    return uid in ADMIN_IDS
 
-# ================= GITHUB =================
+# ================= GITHUB FETCH =================
 def fetch_plugin(name):
     try:
         url = GITHUB_RAW + name + ".py"
-        r = requests.get(url, timeout=10)
+        r = requests.get(url)
 
         if r.status_code == 200:
             os.makedirs("plugins", exist_ok=True)
+
             with open(f"plugins/{name}.py", "w", encoding="utf-8") as f:
                 f.write(r.text)
+
             return True
     except:
         pass
     return False
 
-# ================= HOT RELOAD ENGINE =================
-def unload_plugin(name):
-    try:
-        if name in PLUGIN_ROUTERS:
-            router = PLUGIN_ROUTERS[name]
-
-            if router in dp._routers:
-                dp._routers.remove(router)
-
-            del PLUGIN_ROUTERS[name]
-
-        if name in PLUGINS:
-            del PLUGINS[name]
-
-    except Exception as e:
-        print("Unload error:", e)
-
+# ================= PLUGIN SYSTEM =================
 def load_plugin(name):
     try:
         path = f"plugins/{name}.py"
@@ -91,13 +77,28 @@ def load_plugin(name):
             router = module.setup()
             dp.include_router(router)
 
-            PLUGIN_ROUTERS[name] = router
             PLUGINS[name] = module
+            ROUTERS[name] = router
 
             print("Loaded:", name)
 
     except Exception as e:
-        print("Load error:", name, e)
+        print("Load error:", e)
+
+
+def unload_plugin(name):
+    try:
+        if name in ROUTERS:
+            try:
+                dp._routers.remove(ROUTERS[name])
+            except:
+                pass
+
+            del ROUTERS[name]
+            del PLUGINS[name]
+    except:
+        pass
+
 
 def reload_plugin(name):
     unload_plugin(name)
@@ -105,29 +106,30 @@ def reload_plugin(name):
     load_plugin(name)
 
 # ================= LOAD ALL =================
-def load_all_plugins():
+def load_all():
     os.makedirs("plugins", exist_ok=True)
 
-    for p in plugins_db.find():
-        name = p["name"]
-        fetch_plugin(name)
-        load_plugin(name)
+    for file in os.listdir("plugins"):
+        if file.endswith(".py"):
+            load_plugin(file[:-3])
 
-# ================= COMMANDS =================
-
+# ================= START =================
 @dp.message(Command("start"))
 async def start(msg: types.Message):
-    await msg.answer("🤖 FULL BOT ONLINE\n⚡ PRO ENGINE ACTIVE")
+    await msg.answer("🤖 BOT ONLINE + PRO ENGINE ACTIVE")
 
+# ================= PLUGINS LIST =================
 @dp.message(Command("plugins"))
 async def plugins(msg: types.Message):
-    data = [p["name"] for p in plugins_db.find()]
-    await msg.answer("📦 Plugins:\n" + "\n".join(data) if data else "No plugins")
+    data = [p for p in plugins_db.find()]
+    names = "\n".join([d["name"] for d in data]) if data else "No plugins"
+    await msg.answer(names)
 
+# ================= ENABLE PLUGIN =================
 @dp.message(Command("enable"))
 async def enable(msg: types.Message):
     if not is_admin(msg.from_user.id):
-        return await msg.answer("❌ Not allowed")
+        return
 
     try:
         name = msg.text.split()[1]
@@ -140,42 +142,45 @@ async def enable(msg: types.Message):
 
         reload_plugin(name)
 
-        await msg.answer(f"✅ Enabled: {name}")
+        await msg.answer(f"Enabled {name}")
 
     except:
         await msg.answer("Usage: /enable name")
 
+# ================= DELETE PLUGIN =================
 @dp.message(Command("delete"))
 async def delete(msg: types.Message):
     if not is_admin(msg.from_user.id):
-        return await msg.answer("❌ Not allowed")
+        return
 
     try:
         name = msg.text.split()[1]
 
         plugins_db.delete_one({"name": name})
 
-        if os.path.exists(f"plugins/{name}.py"):
-            os.remove(f"plugins/{name}.py")
-
         unload_plugin(name)
 
-        await msg.answer(f"🗑 Deleted: {name}")
+        try:
+            os.remove(f"plugins/{name}.py")
+        except:
+            pass
+
+        await msg.answer(f"Deleted {name}")
 
     except:
         await msg.answer("Usage: /delete name")
 
-# -------- UPLOAD FLOW --------
+# ================= UPLOAD =================
 @dp.message(Command("upload"))
-async def upload_start(msg: types.Message):
+async def upload(msg: types.Message):
     if not is_admin(msg.from_user.id):
-        return await msg.answer("❌ Not allowed")
+        return
 
     UPLOAD_STATE[msg.from_user.id] = True
-    await msg.answer("📤 Send cmd file (.py)")
+    await msg.answer("📤 Send .py plugin file")
 
 @dp.message(lambda m: m.document)
-async def receive_file(msg: types.Message):
+async def file_handler(msg: types.Message):
     if not is_admin(msg.from_user.id):
         return
 
@@ -186,7 +191,7 @@ async def receive_file(msg: types.Message):
     name = msg.document.file_name
 
     if not name.endswith(".py"):
-        return await msg.answer("❌ Only .py file")
+        return await msg.answer("Only .py allowed")
 
     os.makedirs("plugins", exist_ok=True)
 
@@ -196,28 +201,18 @@ async def receive_file(msg: types.Message):
 
     plugin_name = name.replace(".py", "")
 
-    plugins_db.update_one(
-        {"name": plugin_name},
-        {"$set": {"name": plugin_name}},
-        upsert=True
-    )
-
     reload_plugin(plugin_name)
 
     UPLOAD_STATE[msg.from_user.id] = False
 
-    await msg.answer(f"""
-✅ Plugin Uploaded
-📄 {name}
-⚡ Live Activated
-""")
+    await msg.answer(f"Uploaded + Active: {plugin_name}")
 
 # ================= MAIN =================
 async def main():
-    print("🚀 BOT STARTING...")
+    print("BOT STARTING...")
 
-    load_all_plugins()
     keep_alive()
+    load_all()
 
     await dp.start_polling(bot)
 
