@@ -13,7 +13,7 @@ BOT_TOKEN = "8701988504:AAHgFsnTkV1n_Q_jv8iE93LSZSTn3OoqBSA"
 ADMINS = [7793812954]
 
 MONGO_URI = "mongodb+srv://f6388600_db_user:<db_password>@cluster0.k7ui3lf.mongodb.net/?appName=Cluster0"
-GITHUB_RAW = "https://raw.githubusercontent.com/USERNAME/REPO/main/plugins/"
+GITHUB_RAW = "https://raw.githubusercontent.com/f6388600-ai/Uhh/main/plugins/"
 
 # ================= INIT =================
 bot = Bot(token=BOT_TOKEN)
